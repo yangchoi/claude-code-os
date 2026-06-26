@@ -1,161 +1,146 @@
-# Claude Code Boilerplate
+# claude-code-os
 
-Claude Code 프로젝트 설정 보일러플레이트. [Best Practices](https://code.claude.com/docs/en/best-practices) 기반.
+> An opinionated, memory-driven operating layer for Claude Code.
+> Not a skill library — a template for one that compounds.
 
-## Quick Start
+Most Claude Code skill packs ship a list of static skills. After a few weeks
+the list stops growing, the skills stop matching how you actually work, and
+you're back to writing prompts from scratch every session.
+
+This repo takes the opposite approach. The skills here are useful, but they
+are not the product. The product is **the system that lets you keep
+producing skills, feedback rules, and project context that compound over
+months of real use** — without RAG, without a database, without leaving
+plain markdown.
+
+## What's in here
+
+```
+templates/    The system. Empty MEMORY.md skeleton, feedback-note format,
+              project-note format. Copy these into your Claude Code memory
+              directory and start writing.
+docs/         How the memory system works, in detail. Start with
+              docs/memory-system.md.
+scripts/      memory-health-check.sh — catches the silent failure modes
+              (size cap, broken wiki-links, missing frontmatter). Run weekly.
+skills/       Thirteen skills that have earned their keep across months of
+              real use. Each one decouples from any specific project.
+docs/lessons.md   Six months in: what survived, what got deleted, what
+                  surprised me.
+```
+
+## The system, in one paragraph
+
+A single auto-loaded index (`MEMORY.md`, hard-capped at 200 lines) points to
+topic files organized by type — `user`, `feedback`, `project`, `reference`.
+The load-bearing piece is the `feedback` note: every correction the user
+makes, plus every non-obvious approach they validate, gets one. Each note
+leads with the rule, then *why* (the reason that lets future-you judge edge
+cases), then *how to apply* (which keeps the rule scoped). Cross-references
+between notes use `[[wiki-link]]` syntax. A health check script catches the
+silent failure modes (index over 200 lines → entries truncated;
+`[[link]]` to a missing note → unsurfaced TODO; note without frontmatter →
+type-based behaviors won't fire). The first month feels like overhead. The
+third month feels like leverage.
+
+The full explanation is in [docs/memory-system.md](docs/memory-system.md).
+The six-month retrospective is in [docs/lessons.md](docs/lessons.md).
+
+## The skills
+
+The thirteen below are the ones that survived the cull. Each one is
+decoupled from any specific employer, project, or codebase — they work
+the same way in a personal repo, a startup, or a large team setup.
+
+| Skill | What it does |
+|---|---|
+| [safe-autonomy](skills/safe-autonomy/SKILL.md) | Autonomous on the inside (read/edit/test freely), gated at the boundary (commits, deploys, external APIs). Encodes the `[code]` / `[prod]` / `[irreversible]` taxonomy. |
+| [agent-tune](skills/agent-tune/SKILL.md) | Reads Claude Code session logs, surfaces low-performing agents, proposes prompt edits with backup + rollback. The closest thing to an observability loop for your custom agents. |
+| [parallel](skills/parallel/SKILL.md) | Fan out independent work to concurrent subagents. Single-message multi-Task pattern, optional tmux pane layout for visualization. |
+| [workflow-guide](skills/workflow-guide/SKILL.md) | Reference for the Claude Code patterns that earn their keep: Plan Mode, interview-driven specs, parallel session sequencing, context management, headless mode. |
+| [git-commit-pr](skills/git-commit-pr/SKILL.md) | Commit + PR flow with a pre-commit secrets check (file patterns + content patterns) and Conventional Commits style. |
+| [deploy-watch](skills/deploy-watch/SKILL.md) | Background poll for Vercel deploys (via GitHub Deployments API) or AWS ECS rollouts, with desktop notification on completion or failure. |
+| [switch](skills/switch/SKILL.md) | Project teleport with arrival context (branch, modified files, top of CLAUDE.md). Map of named projects in a JSON config. |
+| [memo](skills/memo/SKILL.md) | Lightweight cross-session handoff notes stored in a single JSON file. For parallel sessions, not a knowledge base. |
+| [my-config](skills/my-config/SKILL.md) | One-screen summary of what's actually loaded — settings, skills, agents, hooks, MCP servers. For "is X live?" debugging. |
+| [whoami](skills/whoami/SKILL.md) | Persistent developer profile (stack, preferences, experience) so Claude doesn't re-ask the same setup questions every session. |
+| [mybacklog](skills/mybacklog/SKILL.md) | Markdown-backed personal TODO list. add / done / remove. The file is plain enough that you can also edit it by hand. |
+| [weekly-report](skills/weekly-report/SKILL.md) | Status report drafted from your real PRs, issues, and commits across a configurable repo set. Groups related changes into features and incidents. |
+| [linkedin-draft](skills/linkedin-draft/SKILL.md) | Weekly post drafter that pulls from real shipped work, enforces a no-confidential-info filter and a no-emoji / no-rage-bait tone. Always gated before publish. |
+
+## Why the system matters more than the skills
+
+A skill is a frozen answer. A memory system is what lets the answer evolve.
+
+When the user corrects you mid-session — "no, don't auto-commit", "stop
+suggesting we batch this" — without a memory system, that correction
+lives only in the current conversation. Next session, you re-make the
+same mistake, the user re-corrects, and nothing accumulates. With this
+system, each correction becomes a `feedback` note. By month three, the
+default behavior matches how the user actually wants things done. By
+month six, you can pick up any project and Claude knows the conventions
+before you say them.
+
+The skills are downstream of the system. They demonstrate what the system
+produces, and they're useful in their own right — but if you only copy
+the skills and skip the templates and the discipline, you'll end up with
+a skill library that doesn't compound. Like the other ones.
+
+## Quick start
+
+If you want the full setup:
 
 ```bash
-# 프로젝트 루트로 복사
-cp -r .claude /your/project/
-cp CLAUDE.md /your/project/
+git clone https://github.com/yangchoi/claude-code-os
+cd claude-code-os
 
-# 스크립트 권한 부여
-chmod +x /your/project/.claude/hooks/*.sh
+# Copy the memory system templates into your Claude Code project memory dir
+# (path varies by project; common locations below)
+PROJECT_MEMORY="$HOME/.claude/projects/$(pwd | sed 's|/|-|g')/memory"
+mkdir -p "$PROJECT_MEMORY"
+cp templates/MEMORY.md "$PROJECT_MEMORY/"
+
+# Install the health check
+mkdir -p "$HOME/bin"
+cp scripts/memory-health-check.sh "$HOME/bin/"
+chmod +x "$HOME/bin/memory-health-check.sh"
+
+# Install the skills you want, one at a time. Skills are independent.
+cp -r skills/safe-autonomy "$HOME/.claude/skills/"
+cp -r skills/parallel "$HOME/.claude/skills/"
+# ... etc
 ```
 
-## Structure
+The skills are independent. Install only what you'll use; the rest stays
+in the repo.
 
-```
-.claude/
-├── agents/           # Subagents
-│   ├── code-reviewer.md      # Kent Beck Simple Design 기반 리뷰어
-│   ├── test-writer.md
-│   ├── nestjs-reviewer.md
-│   ├── frontend-reviewer.md
-│   └── dag-reviewer.md
-├── hooks/            # Pre/Post hooks
-│   ├── dangerous-command-check.sh  # PreToolUse: 위험 명령어 차단
-│   ├── auto-lint.sh               # PostToolUse: 자동 eslint --fix
-│   └── macos-notification.sh      # Notification: 작업 완료 알림
-└── settings.local.json.example
+If you want just one piece — say, the `safe-autonomy` skill or the
+`memory-health-check.sh` script — they work standalone. The system
+becomes more valuable as you adopt more of it, but there's no
+all-or-nothing requirement.
 
-templates/            # Project-specific CLAUDE.md templates
-├── CLAUDE-frontend.md
-├── CLAUDE-backend.md
-├── CLAUDE-airflow.md
-└── test_local.sh
+## What this is not
 
-skills/               # Custom skill examples
-└── example-skill.md
+- **Not a generic best-practice library.** Other repos already do that;
+  this one is opinionated about the *meta-layer* of how to keep your
+  agent setup honest over time, not about how to write a unit test.
+- **Not a productivity system.** It doesn't track tasks, it tracks
+  judgment — the kind that takes months to build and you don't want
+  to lose to context window limits.
+- **Not RAG.** No embeddings, no vector search. The corpus is bounded
+  by what one person writes; auto-load + 200-line cap is enough.
+- **Not finished.** The system is alive. The skills change as the work
+  changes. Treat this as a snapshot of a working setup, not a frozen
+  pattern.
 
-CLAUDE.md             # Root/shared guidelines
-```
+## Where this fits
 
-## Features
-
-### 1. CLAUDE.md
-
-프로젝트별 컨텍스트 파일. Claude가 자동으로 읽음.
-
-**템플릿 태그:**
-- `[business info]` - 회사/프로젝트별 정보 (DB 호스트, 프로젝트 목록 등)
-- `[custom]` - 팀별 커스텀 규칙
-
-```markdown
-# Project Name
-
-## 코딩 원칙
-Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven
-
-## 필수 규칙
-커밋 금지 파일, Co-Authored-By 금지, Assignee 등
-
-## Database 환경 [business info]
-Production/Staging 호스트
-
-## 코드 작성 후 자동 리뷰
-code-reviewer 서브에이전트 자동 실행
-
-## 도메인별 Skills [custom]
-팀별 스킬 목록
-```
-
-### 2. 코딩 원칙
-
-CLAUDE.md에 포함된 핵심 원칙:
-
-1. **Think Before Coding** - 가정 명시, 불확실하면 질문
-2. **Simplicity First** - 요청한 것만 구현, 추측성 기능 금지
-3. **Surgical Changes** - 관련 코드만 수정, 인접 코드 "개선" 금지
-4. **Goal-Driven Execution** - 작업을 검증 가능한 목표로 변환
-
-### 3. Subagents
-
-코드 리뷰, 테스트 작성 등을 위임:
-
-```
-"use subagent code-reviewer to review this code"
-"use subagent test-writer to write tests for this function"
-```
-
-**code-reviewer**는 Kent Beck Simple Design 원칙 기반으로 over-engineering을 잡아냄.
-
-### 4. Hooks
-
-3가지 hook 타입 지원:
-
-| Hook | 타입 | 역할 |
-|------|------|------|
-| `dangerous-command-check.sh` | PreToolUse (Bash) | `rm -rf /`, `DROP TABLE`, force push 등 차단 |
-| `auto-lint.sh` | PostToolUse (Edit/Write) | ts/js/tsx/jsx 파일 저장 시 eslint --fix 자동 실행 |
-| `macos-notification.sh` | Notification | 작업 완료 시 macOS 알림 |
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "dangerous-command-check.sh" }] }
-    ],
-    "PostToolUse": [
-      { "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "auto-lint.sh" }] }
-    ],
-    "Notification": [
-      { "hooks": [{ "type": "command", "command": "macos-notification.sh" }] }
-    ]
-  }
-}
-```
-
-### 5. 자동 코드 리뷰
-
-코드 변경 작업 완료 시 `code-reviewer` 서브에이전트가 자동 실행:
-- Kent Beck Simple Design 4원칙 기반
-- Over-engineering 패턴 감지
-- Code Smells + 유지보수성 체크
-- 코드 수정 없이 피드백만 제공
-
-### 6. Workflow Patterns
-
-**Plan Mode** - 복잡한 작업 전 계획 수립:
-1. Explore (read files, understand patterns)
-2. Plan (create implementation plan)
-3. Implement (write code)
-4. Test & Commit
-
-**Claude Interview** - 요구사항 정의:
-```
-I want to build [feature]. Interview me using AskUserQuestion.
-```
-
-**Parallel Sessions**:
-- Session A: Writer
-- Session B: Reviewer
-
-**Git Worktree** - 여러 브랜치 동시 작업:
-```bash
-git worktree add ../project-wt -b _worktree-temp
-cd ../project-wt
-git checkout -b feature/actual-work  # 이 브랜치만 push
-```
-
-## Customization
-
-1. `settings.local.json.example`을 `settings.local.json`으로 복사
-2. 프로젝트 경로에 맞게 hook 경로 수정
-3. `dangerous-command-check.sh`에 Production DB 패턴 추가
-4. 필요 없는 subagent 삭제
-5. `[business info]`, `[custom]` 태그 부분을 팀에 맞게 수정
+Plenty of skill packs already exist for the *what to do* layer — how to
+write a spec, how to do TDD, how to review. This pack is mostly the
+*how to remember what you decided* layer underneath that. They compose
+well; use this for the operating system, the others for the canonical
+engineering disciplines.
 
 ## License
 
-MIT
+MIT. Use, fork, adapt, ship.
